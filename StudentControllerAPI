@@ -1,0 +1,76 @@
+
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class StudentControllerAPI {
+    private static final String STUDENT_DETAILS_CSV = "student_details.csv";
+
+    @GetMapping("/students")
+    public List<Student> getStudents(
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "pageSize", defaultValue = "10") int pageSize,
+            @RequestParam(value = "filterBy", required = false) String filterBy,
+            @RequestParam(value = "filterValue", required = false) String filterValue
+    ) throws IOException {
+        // Read the student details from the CSV file
+        FileReader fileReader = new FileReader(STUDENT_DETAILS_CSV);
+        CSVParser csvParser = CSVFormat.DEFAULT.withHeader().parse(fileReader);
+        List<Student> studentDetails = new ArrayList<>();
+
+        int startIndex = (page - 1) * pageSize;
+        int endIndex = startIndex + pageSize;
+
+        int recordIndex = 0;
+        for (CSVRecord record : csvParser) {
+            // Extract the student details from the CSV record
+            int id = Integer.parseInt(record.get("id"));
+            String name = record.get("name");
+            int totalMarks = Integer.parseInt(record.get("total_marks"));
+
+            Student student = new Student(id, name, totalMarks);
+
+            // Apply server-side filtering if filter criteria are provided
+            if (filterBy != null && filterValue != null) {
+                switch (filterBy) {
+                    case "id":
+                        if (!String.valueOf(student.getId()).equals(filterValue)) {
+                            continue; // Skip this record if the id doesn't match the filter value
+                        }
+                        break;
+                    case "name":
+                        if (!student.getName().toLowerCase().contains(filterValue.toLowerCase())) {
+                            continue; // Skip this record if the name doesn't contain the filter value
+                        }
+                        break;
+                    case "totalMarks":
+                        int filterMarks = Integer.parseInt(filterValue);
+                        if (student.getTotalMarks() < filterMarks) {
+                            continue; // Skip this record if the total marks are less than the filter value
+                        }
+                        break;
+                    // Add more cases for additional filter options
+                }
+            }
+
+            // Add the student details to the result list if it falls within the pagination range
+            if (recordIndex >= startIndex && recordIndex < endIndex) {
+                studentDetails.add(student);
+            }
+            recordIndex++;
+        }
+
+        csvParser.close();
+        fileReader.close();
+
+        return studentDetails;
+    }
+}
